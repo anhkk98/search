@@ -173,8 +173,6 @@ class SearchWithSuggestionDelegate extends SearchDelegate<String> {
                             title: Text('${_oldFilters[index]}'),
                             trailing: IconButton(icon: Icon(Icons.clear), onPressed: ()async{
                               // showResults(context);
-                              snapshot.data.removeAt(index);
-                              print(index);
                             }),
                             onTap: () => close(context, _oldFilters[index]),
                           );
