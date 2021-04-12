@@ -1,0 +1,193 @@
+import 'package:flutter/material.dart';
+import 'package:search/main.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+typedef OnSearchChanged = Future<List<String>> Function(String);
+
+class SearchWithSuggestionDelegate extends SearchDelegate<String> {
+  SearchWithSuggestionDelegate({String searchFieldLabel, this.onSearchChanged})
+      : super(searchFieldLabel: searchFieldLabel);
+
+  /// [onSearchChanged] lấy [query] làm đối số. Sau đó, cuộc gọi lại này
+  /// nên xử lý [query] sau đó trả về [Danh sách <Chuỗi>] dưới dạng đề xuất.
+  /// Vì nó trả về [Future] nên sẽ nhận được đề xuất từ máy chủ.
+  final OnSearchChanged onSearchChanged;
+
+  /// [_oldFilters] này được sử dụng để lưu trữ các đề xuất trước đó. Trong khi chờ đợi để [onSearchChanged] hoàn thành, [_oldFilters] được hiển thị.
+  List<String> _oldFilters = const [];
+
+  /// phần đầu appbar search (nút back)
+  @override
+  Widget buildLeading(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.arrow_back),
+      onPressed: () => Navigator.pop(context),
+    );
+  }
+
+  /// phần cuối appBar search (nút clear text query)
+  @override
+  List<Widget> buildActions(BuildContext context) {
+    return [
+      IconButton(
+        icon: Icon(Icons.clear),
+        onPressed: () => query = '',
+      ),
+    ];
+  }
+
+  ///giá trị nhập trên bàn phim, trẻ về [query]
+  @override
+  void showResults(BuildContext context) {
+    close(context, query);
+  }
+
+  /// hiển thị kết quả tìm kiếm (ko dùng)
+  @override
+  Widget buildResults(BuildContext context) => Container(
+    child: Center(
+      child: Text(query),
+    ),
+  );
+
+  /// list data từ khóa nổi bật
+  List<String> data = [
+    'Phim hoạt hình',
+    'hôm qua e tới trường',
+    'cô đánh e',
+    'e khóc nhè',
+    'em không biết',
+    'bó tay'
+  ];
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+    /// list từ khóa nổi bật
+    List listToShow;
+    if (query.isNotEmpty) {
+      listToShow =
+          data.where((e) => e.contains(query) && e.startsWith(query)).toList();
+    } else {
+      listToShow = data;
+    }
+    return FutureBuilder<List<String>>(
+      future: onSearchChanged != null ? onSearchChanged(query) : null,
+      builder: (context, snapshot) {
+        if (snapshot.hasData) _oldFilters = snapshot.data;
+        return Column(
+          children: [
+            /// view từ khóa nổi bật
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Từ khóa nổi bật',
+                    style: TextStyle(
+                        color: Colors.blue,
+                        fontWeight: FontWeight.bold,
+                        fontStyle: FontStyle.italic,
+                        fontSize: 18),
+                  ),
+                  SizedBox(
+                    height: 10,
+                  ),
+                  Container(
+                    width: MediaQuery.of(context).size.width,
+                    height: 35,
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: listToShow.length,
+                      scrollDirection: Axis.horizontal,
+                      itemBuilder: (_, i) {
+                        return GestureDetector(
+                          onTap: () => close(context, listToShow[i]),
+                          child: Container(
+                            alignment: Alignment.center,
+                            margin: EdgeInsets.symmetric(horizontal: 5),
+                            padding: EdgeInsets.only(
+                                left: 10, right: 10, top: 5, bottom: 5),
+                            decoration: BoxDecoration(
+                                border: Border.all(color: Colors.blue),
+                                color: Colors.blue[200].withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(15)),
+                            /// hiện thì màu theo ký tự đã nhập
+                            child: RichText(
+                                text: TextSpan(
+                                    text: listToShow[i].substring(0, query.length),
+                                    style: TextStyle(
+                                        color: Colors.black, fontWeight: FontWeight.bold),
+                                    children: [
+                                      TextSpan(
+                                          text: listToShow[i].substring(query.length),
+                                          style: TextStyle(color: Colors.grey[500]))
+                                    ])),
+                          ),
+                        );
+                        // ListTile(
+                        // title: Text(listToShow[i]),
+                        // onTap: () => close(context, listToShow[i]),
+                        // );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: 10,
+            ),
+
+            /// view lịch sử tìm kiếm
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Lịch sử tìm kiếm',
+                            style:
+                            TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                          ),
+                        ),
+                        InkWell(child: Text('Xóa tất cả',style: TextStyle(fontStyle: FontStyle.italic,decoration: TextDecoration.underline),), onTap: () async{
+                          final pref = await SharedPreferences.getInstance();
+                          pref.clear();
+                        },),
+                      ],
+                    ),
+                    SizedBox(
+                      height: 5,
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: _oldFilters.length,
+                        itemBuilder: (context, index) {
+                          return ListTile(
+                            leading: Icon(Icons.restore),
+                            title: Text('${_oldFilters[index]}'),
+                            trailing: IconButton(icon: Icon(Icons.clear), onPressed: ()async{
+                              // showResults(context);
+                              snapshot.data.removeAt(index);
+                              print(index);
+                            }),
+                            onTap: () => close(context, _oldFilters[index]),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
